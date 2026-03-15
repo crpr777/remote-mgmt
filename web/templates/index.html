@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>遠隔管理 // REMOTE MGMT</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cyan: #00d4d4;
+            --cyan-glow: rgba(0, 212, 212, 0.4);
+            --cyan-subtle: rgba(0, 212, 212, 0.08);
+            --magenta: #d400aa;
+            --bg: #08090c;
+            --bg-card: #0c0e12;
+            --border: rgba(0, 212, 212, 0.15);
+            --text: #b8c5c5;
+            --text-dim: #4a5858;
+            --success: #00c896;
+            --warning: #c8a000;
+            --danger: #c84040;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'IBM Plex Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Subtle scan lines */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.03) 2px,
+                rgba(0, 0, 0, 0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        /* Header */
+        .header {
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 120px;
+            height: 1px;
+            background: var(--cyan);
+            box-shadow: 0 0 20px var(--cyan-glow);
+        }
+
+        .header-left {}
+
+        .header-top {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .nav-link {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-decoration: none;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: var(--cyan);
+            border-color: var(--border);
+        }
+
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--cyan);
+            letter-spacing: 0.15em;
+        }
+
+        .logo-jp {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            letter-spacing: 0.3em;
+        }
+
+        .header-sub {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            letter-spacing: 0.05em;
+        }
+
+        .header-sub span {
+            color: var(--magenta);
+            opacity: 0.7;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--cyan), transparent);
+        }
+
+        .card-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .card-header h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+        }
+
+        .card-header .tag {
+            font-size: 0.6rem;
+            padding: 0.2rem 0.5rem;
+            background: var(--cyan-subtle);
+            color: var(--cyan);
+            letter-spacing: 0.1em;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-left: 2px solid var(--warning);
+            background: rgba(200, 160, 0, 0.05);
+            font-size: 0.8rem;
+            color: var(--warning);
+        }
+
+        .alert a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+
+        .alert a:hover {
+            text-decoration: underline;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: rgba(0, 212, 212, 0.03);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--cyan);
+            background: rgba(0, 212, 212, 0.06);
+            box-shadow: 0 0 0 3px var(--cyan-subtle);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .form-hint {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 0.5rem;
+        }
+
+        /* Target selection */
+        .target-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+
+        .target-option {
+            padding: 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .target-option:hover {
+            border-color: rgba(0, 212, 212, 0.4);
+            background: var(--cyan-subtle);
+        }
+
+        .target-option.selected {
+            border-color: var(--cyan);
+            background: var(--cyan-subtle);
+        }
+
+        .target-option.selected::after {
+            content: '●';
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            color: var(--cyan);
+            font-size: 0.5rem;
+        }
+
+        .target-option input {
+            display: none;
+        }
+
+        .target-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 0.25rem;
+        }
+
+        .target-arch {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* Button */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            border: 1px solid;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: transparent;
+            color: var(--cyan);
+            border-color: var(--cyan);
+        }
+
+        .btn-primary:hover {
+            background: var(--cyan);
+            color: var(--bg);
+            box-shadow: 0 0 30px var(--cyan-glow);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-primary:disabled:hover {
+            background: transparent;
+            color: var(--cyan);
+            box-shadow: none;
+        }
+
+        .btn-success {
+            width: 100%;
+            background: transparent;
+            color: var(--success);
+            border-color: var(--success);
+        }
+
+        .btn-success:hover {
+            background: var(--success);
+            color: var(--bg);
+            box-shadow: 0 0 30px rgba(0, 200, 150, 0.4);
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid transparent;
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Result */
+        .result {
+            margin-top: 1.5rem;
+            padding: 1.25rem;
+            display: none;
+        }
+
+        .result.success {
+            display: block;
+            background: rgba(0, 200, 150, 0.05);
+            border: 1px solid rgba(0, 200, 150, 0.3);
+        }
+
+        .result.error {
+            display: block;
+            background: rgba(200, 64, 64, 0.05);
+            border: 1px solid rgba(200, 64, 64, 0.3);
+        }
+
+        .result-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 0.75rem;
+        }
+
+        .result.success .result-title {
+            color: var(--success);
+        }
+
+        .result.error .result-title {
+            color: var(--danger);
+        }
+
+        .result-details {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 1rem;
+        }
+
+        .result-details div {
+            margin-bottom: 0.25rem;
+        }
+
+        /* Instructions */
+        .instructions ol {
+            list-style: none;
+            counter-reset: step;
+        }
+
+        .instructions li {
+            counter-increment: step;
+            padding: 0.75rem 0;
+            padding-left: 2.5rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+            position: relative;
+        }
+
+        .instructions li:last-child {
+            border-bottom: none;
+        }
+
+        .instructions li::before {
+            content: counter(step, decimal-leading-zero);
+            position: absolute;
+            left: 0;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            color: var(--magenta);
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            letter-spacing: 0.1em;
+        }
+
+        /* Subtle pulse animation for active states */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-left">
+                <div class="header-top">
+                    <div class="logo">REMOTE_MGMT</div>
+                    <div class="logo-jp">遠隔管理</div>
+                </div>
+                <div class="header-sub">Secure deployment interface <span>//</span> v2.0</div>
+            </div>
+            <nav class="header-nav">
+                <a href="/" class="nav-link active">Build</a>
+                <a href="/clients" class="nav-link">Clients</a>
+            </nav>
+        </header>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Compile Agent</h2>
+                <span class="tag">Build System</span>
+            </div>
+            <div class="card-body">
+                <div class="alert">
+                    Auth key embedded in binary. Use ephemeral keys from 
+                    <a href="https://login.tailscale.com/admin/settings/keys" target="_blank">Tailscale Admin</a> 
+                    for maximum security.
+                </div>
+
+                <form id="buildForm">
+                    <div class="form-group">
+                        <label class="form-label">Tailscale Auth Key</label>
+                        <input type="password" class="form-input" id="authKey" 
+                               placeholder="tskey-auth-xxxxxxxxxxxxx" required>
+                        <div class="form-hint">Generate from Tailscale Admin → Settings → Keys</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Hostname Prefix</label>
+                        <input type="text" class="form-input" id="hostnamePrefix" 
+                               placeholder="rmgmt" value="rmgmt">
+                        <div class="form-hint">Clients appear as "prefix-hostname" in your tailnet</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Target Platform</label>
+                        <div class="target-grid">
+                            {{range .Targets}}
+                            <label class="target-option" data-os="{{.OS}}" data-arch="{{.Arch}}">
+                                <input type="radio" name="target" value="{{.OS}}-{{.Arch}}" required>
+                                <div class="target-name">{{.Name}}</div>
+                                <div class="target-arch">{{.OS}}/{{.Arch}}</div>
+                            </label>
+                            {{end}}
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="buildBtn">
+                        Compile Binary
+                    </button>
+                </form>
+
+                <div class="result" id="result">
+                    <div class="result-title" id="resultTitle"></div>
+                    <div class="result-details" id="resultDetails"></div>
+                    <div id="resultAction"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Deployment</h2>
+                <span class="tag">Instructions</span>
+            </div>
+            <div class="card-body instructions">
+                <ol>
+                    <li>Generate auth key from Tailscale admin console</li>
+                    <li>Select target platform and compile</li>
+                    <li>Distribute binary to endpoint users</li>
+                    <li>User executes binary — zero configuration required</li>
+                    <li>Client registers to tailnet automatically</li>
+                </ol>
+            </div>
+        </div>
+
+        <footer class="footer">
+            SECTION_9 // SECURE REMOTE MANAGEMENT SYSTEM
+        </footer>
+    </div>
+
+    <script>
+        // Target selection
+        document.querySelectorAll('.target-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                document.querySelectorAll('.target-option').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+                opt.querySelector('input').checked = true;
+            });
+        });
+
+        // Form submission
+        document.getElementById('buildForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btn = document.getElementById('buildBtn');
+            const result = document.getElementById('result');
+            const resultTitle = document.getElementById('resultTitle');
+            const resultDetails = document.getElementById('resultDetails');
+            const resultAction = document.getElementById('resultAction');
+            
+            const selected = document.querySelector('input[name="target"]:checked');
+            if (!selected) {
+                alert('Select a target platform');
+                return;
+            }
+
+            const [targetOS, targetArch] = selected.value.split('-');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<div class="spinner"></div> Compiling...';
+            result.className = 'result';
+            
+            try {
+                const resp = await fetch('/api/build', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        auth_key: document.getElementById('authKey').value,
+                        target_os: targetOS,
+                        target_arch: targetArch,
+                        hostname_prefix: document.getElementById('hostnamePrefix').value || 'rmgmt'
+                    })
+                });
+                
+                const data = await resp.json();
+                
+                if (data.success) {
+                    result.className = 'result success';
+                    resultTitle.textContent = 'Build Complete';
+                    resultDetails.innerHTML = `
+                        <div>File: ${data.filename}</div>
+                        <div>Size: ${(data.size / 1024 / 1024).toFixed(2)} MB</div>
+                        <div>Time: ${data.build_time}</div>
+                    `;
+                    resultAction.innerHTML = `
+                        <a href="${data.download_url}" class="btn btn-success" download>
+                            Download Binary
+                        </a>
+                    `;
+                } else {
+                    result.className = 'result error';
+                    resultTitle.textContent = 'Build Failed';
+                    resultDetails.textContent = data.error;
+                    resultAction.innerHTML = '';
+                }
+            } catch (err) {
+                result.className = 'result error';
+                resultTitle.textContent = 'Error';
+                resultDetails.textContent = err.message;
+                resultAction.innerHTML = '';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Compile Binary';
+            }
+        });
+    </script>
+</body>
+</html>

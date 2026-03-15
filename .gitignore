@@ -1,0 +1,24 @@
+# Compiled binaries
+/admin-server
+/client
+bin/
+*.exe
+
+# Build artifacts
+/tmp/rmgmt-builds-*
+
+# Tailscale state
+.rmgmt-admin/
+
+# Go
+vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

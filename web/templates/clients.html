@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLIENTS // 遠隔管理</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cyan: #00d4d4;
+            --cyan-glow: rgba(0, 212, 212, 0.4);
+            --cyan-subtle: rgba(0, 212, 212, 0.08);
+            --magenta: #d400aa;
+            --bg: #08090c;
+            --bg-card: #0c0e12;
+            --border: rgba(0, 212, 212, 0.15);
+            --text: #b8c5c5;
+            --text-dim: #4a5858;
+            --success: #00c896;
+            --danger: #c84040;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'IBM Plex Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 212, 212, 0.015) 2px,
+                rgba(0, 212, 212, 0.015) 4px
+            );
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .header {
+            padding: 2rem 3rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+        }
+
+        .brand h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--cyan);
+            letter-spacing: 0.2em;
+        }
+
+        .brand .jp {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-link {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-decoration: none;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: var(--cyan);
+            border-color: var(--border);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 3rem;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
+
+        .refresh-btn {
+            padding: 0.5rem 0.875rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .refresh-btn:hover {
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        .clients-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .client-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 1.25rem;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .client-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--text-dim);
+            transition: background 0.2s;
+        }
+
+        .client-card:hover {
+            border-color: var(--cyan);
+        }
+
+        .client-card:hover::before {
+            background: var(--cyan);
+        }
+
+        .client-card.online::before {
+            background: var(--success);
+        }
+
+        .client-card.offline::before {
+            background: var(--danger);
+        }
+
+        .client-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .client-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            color: var(--text);
+            letter-spacing: 0.05em;
+        }
+
+        .client-status {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--text-dim);
+        }
+
+        .client-card.online .status-dot {
+            background: var(--success);
+            box-shadow: 0 0 6px var(--success);
+        }
+
+        .client-card.offline .status-dot {
+            background: var(--danger);
+        }
+
+        .client-info {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+        }
+
+        .info-item .label {
+            color: var(--text-dim);
+        }
+
+        .info-item .value {
+            color: var(--text);
+        }
+
+        .client-actions {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 0.5rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.65rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .action-btn:hover {
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        .action-btn.primary {
+            border-color: var(--cyan);
+            background: var(--cyan-subtle);
+            color: var(--cyan);
+        }
+
+        .action-btn.primary:hover {
+            background: var(--cyan);
+            color: var(--bg);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-dim);
+        }
+
+        .empty-state .icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .empty-state p {
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state .hint {
+            font-size: 0.75rem;
+            opacity: 0.6;
+        }
+
+        /* Manual connect */
+        .connect-form {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+        }
+
+        .form-group {
+            flex: 1;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.625rem 0.75rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--cyan);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .connect-btn {
+            padding: 0.625rem 1.25rem;
+            background: var(--cyan-subtle);
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .connect-btn:hover {
+            background: var(--cyan);
+            color: var(--bg);
+        }
+
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--border);
+            border-top-color: var(--cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="brand">
+            <h1>CLIENTS</h1>
+            <span class="jp">接続端末</span>
+        </div>
+        <nav class="header-nav">
+            <a href="/" class="nav-link">Build</a>
+            <a href="/clients" class="nav-link active">Clients</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="connect-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Connect to endpoint</label>
+                    <input type="text" class="form-input" id="manualAddress" placeholder="100.x.x.x or hostname">
+                </div>
+                <button class="connect-btn" id="btnManualConnect">Connect</button>
+            </div>
+        </div>
+
+        <div class="section-header">
+            <span class="section-title">Tailnet Clients</span>
+            <button class="refresh-btn" id="btnDiscover">⟳ Discover</button>
+        </div>
+
+        <div class="clients-grid" id="tailnetGrid">
+            <div class="empty-state">
+                <div class="icon">◇</div>
+                <p>Scanning tailnet...</p>
+            </div>
+        </div>
+
+        <div class="section-header" style="margin-top: 2rem;">
+            <span class="section-title">Manual Endpoints</span>
+            <button class="refresh-btn" id="btnRefresh">↻ Refresh</button>
+        </div>
+
+        <div class="clients-grid" id="clientsGrid">
+            <div class="empty-state">
+                <div class="icon">◇</div>
+                <p>No endpoints discovered</p>
+                <p class="hint">Connect manually or deploy client binaries</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const grid = document.getElementById('clientsGrid');
+        const manualInput = document.getElementById('manualAddress');
+        let clients = [];
+
+        // Load saved clients from localStorage
+        function loadClients() {
+            const saved = localStorage.getItem('rmgmt_clients');
+            if (saved) {
+                clients = JSON.parse(saved);
+                renderClients();
+            }
+        }
+
+        function saveClients() {
+            localStorage.setItem('rmgmt_clients', JSON.stringify(clients));
+        }
+
+        function renderClients() {
+            if (clients.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">◇</div>
+                        <p>No endpoints discovered</p>
+                        <p class="hint">Connect manually or deploy client binaries</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = clients.map((client, idx) => `
+                <div class="client-card ${client.online ? 'online' : 'offline'}" data-idx="${idx}">
+                    <div class="client-header">
+                        <span class="client-name">${client.hostname || client.address}</span>
+                        <span class="client-status">
+                            <span class="status-dot"></span>
+                            ${client.online ? 'Online' : 'Offline'}
+                        </span>
+                    </div>
+                    <div class="client-info">
+                        <div class="info-item">
+                            <span class="label">Address</span>
+                            <span class="value">${client.address}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">OS</span>
+                            <span class="value">${client.os || '—'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Last seen</span>
+                            <span class="value">${client.lastSeen || '—'}</span>
+                        </div>
+                    </div>
+                    <div class="client-actions">
+                        <button class="action-btn primary" onclick="openViewer('${client.address}', '${client.hostname || client.address}')">View</button>
+                        <button class="action-btn" onclick="refreshClient(${idx})">Probe</button>
+                        <button class="action-btn" onclick="removeClient(${idx})">Remove</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Probe client through the server proxy
+        async function probeClient(address) {
+            try {
+                const url = `/proxy/${address}/`;
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 5000);
+                
+                const resp = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeout);
+                
+                if (resp.ok) {
+                    const info = await resp.json();
+                    return {
+                        address,
+                        hostname: info.hostname,
+                        os: `${info.os}/${info.arch}`,
+                        online: true,
+                        lastSeen: new Date().toLocaleString()
+                    };
+                }
+            } catch (e) {
+                // offline
+            }
+            return { address, online: false, lastSeen: new Date().toLocaleString() };
+        }
+
+        // Discover clients from tailnet
+        async function discoverClients() {
+            const grid = document.getElementById('tailnetGrid');
+            grid.innerHTML = `<div class="empty-state"><div class="spinner"></div><p>Scanning tailnet...</p></div>`;
+            
+            try {
+                const resp = await fetch('/api/clients');
+                const discovered = await resp.json();
+                
+                if (!discovered || discovered.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty-state">
+                            <div class="icon">◇</div>
+                            <p>No clients on tailnet</p>
+                            <p class="hint">Deploy client binaries to add endpoints</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                grid.innerHTML = discovered.map(client => `
+                    <div class="client-card ${client.online ? 'online' : 'offline'}">
+                        <div class="client-header">
+                            <span class="client-name">${client.hostname}</span>
+                            <span class="client-status">
+                                <span class="status-dot"></span>
+                                ${client.online ? 'Online' : 'Offline'}
+                            </span>
+                        </div>
+                        <div class="client-info">
+                            <div class="info-item">
+                                <span class="label">Address</span>
+                                <span class="value">${client.ips[0] || '—'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">OS</span>
+                                <span class="value">${client.os || '—'}</span>
+                            </div>
+                        </div>
+                        <div class="client-actions">
+                            <button class="action-btn primary" onclick="openViewer('${client.ips[0]}', '${client.hostname}')">View</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">◇</div>
+                        <p>Discovery unavailable</p>
+                        <p class="hint">Server may be in local-only mode</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function addClient(address) {
+            // Check if already exists
+            const existing = clients.findIndex(c => c.address === address);
+            
+            const info = await probeClient(address);
+            
+            if (existing >= 0) {
+                clients[existing] = { ...clients[existing], ...info };
+            } else {
+                clients.push(info);
+            }
+            
+            saveClients();
+            renderClients();
+        }
+
+        async function refreshClient(idx) {
+            const card = document.querySelector(`[data-idx="${idx}"]`);
+            card.classList.add('loading');
+            
+            const info = await probeClient(clients[idx].address);
+            clients[idx] = { ...clients[idx], ...info };
+            
+            saveClients();
+            renderClients();
+        }
+
+        function removeClient(idx) {
+            clients.splice(idx, 1);
+            saveClients();
+            renderClients();
+        }
+
+        function openViewer(address, hostname) {
+            window.location.href = `/viewer?host=${encodeURIComponent(address)}&name=${encodeURIComponent(hostname)}`;
+        }
+
+        // Manual connect
+        document.getElementById('btnManualConnect').addEventListener('click', async () => {
+            const addr = manualInput.value.trim();
+            if (!addr) return;
+            
+            const btn = document.getElementById('btnManualConnect');
+            btn.innerHTML = '<span class="spinner"></span>Connecting';
+            btn.disabled = true;
+            
+            await addClient(addr);
+            
+            btn.innerHTML = 'Connect';
+            btn.disabled = false;
+            manualInput.value = '';
+        });
+
+        manualInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('btnManualConnect').click();
+            }
+        });
+
+        // Refresh manual clients
+        document.getElementById('btnRefresh').addEventListener('click', async () => {
+            const btn = document.getElementById('btnRefresh');
+            btn.innerHTML = '<span class="spinner"></span>';
+            
+            for (let i = 0; i < clients.length; i++) {
+                const info = await probeClient(clients[i].address);
+                clients[i] = { ...clients[i], ...info };
+            }
+            
+            saveClients();
+            renderClients();
+            btn.innerHTML = '↻ Refresh';
+        });
+
+        // Discover tailnet clients
+        document.getElementById('btnDiscover').addEventListener('click', discoverClients);
+
+        // Init
+        loadClients();
+        discoverClients();
+    </script>
+</body>
+</html>
