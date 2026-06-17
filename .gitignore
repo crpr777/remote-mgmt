@@ -5,11 +5,27 @@ bin/
 *.exe
 *.pkg
 
+# Client binaries embed Tailscale auth keys at compile time — never commit
+remote-mgmt-client-*
+**/remote-mgmt-client-*
+
 # Build artifacts
 /tmp/rmgmt-builds-*
+cmd/client/resource_windows.syso
+cmd/client/rsrc_windows_*.syso
 
-# Tailscale state
+# Tailscale credentials and state — never commit
+.env
+.env.*
+*.authkey
+*tskey*
 .rmgmt-admin/
+.rmgmt-*/
+
+# Backup / scratch files
+* copy
+*.OLD.*
+main.OLD.go*
 
 # Go
 vendor/
