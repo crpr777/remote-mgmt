@@ -214,7 +214,7 @@ Recommended ACLs for controlling access:
 - [x] File browser
 - [x] Command execution
 - [ ] System monitoring / metrics dashboard
-- [ ] Installer packages (.pkg, .msi)
+- [x] Installer packages (.pkg via pkgbuild — no Developer ID required)
 - [ ] Client auto-update mechanism
 - [ ] WebRTC for lower-latency streaming
 

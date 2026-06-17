@@ -516,6 +516,7 @@
         <div class="toolbar-controls">
             <button class="btn-tool active" id="btnView" title="View only">View</button>
             <button class="btn-tool" id="btnControl" title="Take control">Control</button>
+            <button class="btn-tool" id="btnTerminal" title="Terminal view">Term</button>
             <button class="btn-tool" id="btnFullscreen" title="Fullscreen">◱</button>
             <button class="btn-tool" id="btnSidebar" title="Toggle panel">Panel</button>
             <button class="btn-tool danger" id="btnDisconnect">End</button>
@@ -837,6 +838,12 @@
 
         document.getElementById('btnSidebar').addEventListener('click', () => {
             document.getElementById('sidebar').classList.toggle('hidden');
+        });
+
+        document.getElementById('btnTerminal').addEventListener('click', () => {
+            if (eventSource) eventSource.close();
+            const params = new URLSearchParams(window.location.search);
+            window.location.href = `/terminal?host=${params.get('host') || ''}&name=${params.get('name') || ''}`;
         });
 
         document.getElementById('btnDisconnect').addEventListener('click', () => {

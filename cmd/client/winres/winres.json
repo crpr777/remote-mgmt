@@ -1,0 +1,47 @@
+{
+  "RT_GROUP_ICON": {
+    "APP": {
+      "0000": [
+        "icon.png"
+      ]
+    }
+  },
+  "RT_MANIFEST": {
+    "#1": {
+      "0409": {
+        "identity": {
+          "name": "Section9.EndpointManagement",
+          "version": "1.0.0.0"
+        },
+        "description": "Section 9 Endpoint Management Service",
+        "minimum-os": "win7",
+        "execution-level": "asInvoker",
+        "dpi-awareness": "system",
+        "use-common-controls-v6": true
+      }
+    }
+  },
+  "RT_VERSION": {
+    "#1": {
+      "0000": {
+        "fixed": {
+          "file_version": "1.0.0.0",
+          "product_version": "1.0.0.0"
+        },
+        "info": {
+          "0409": {
+            "Comments": "Secure endpoint management agent",
+            "CompanyName": "Public Security Section 9",
+            "FileDescription": "Section 9 Endpoint Management Service",
+            "FileVersion": "1.0.0.0",
+            "InternalName": "s9-endpoint-svc",
+            "LegalCopyright": "\u00a9 Public Security Section 9. All rights reserved.",
+            "OriginalFilename": "s9-endpoint-svc.exe",
+            "ProductName": "Section 9 Endpoint Management",
+            "ProductVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  }
+}

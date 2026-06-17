@@ -3,6 +3,7 @@
 /client
 bin/
 *.exe
+*.pkg
 
 # Build artifacts
 /tmp/rmgmt-builds-*

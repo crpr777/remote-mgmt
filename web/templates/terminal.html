@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Hostname}} // TERMINAL</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cyan: #00d4d4;
+            --cyan-glow: rgba(0, 212, 212, 0.4);
+            --cyan-subtle: rgba(0, 212, 212, 0.08);
+            --magenta: #d400aa;
+            --bg: #08090c;
+            --bg-card: #0c0e12;
+            --border: rgba(0, 212, 212, 0.15);
+            --text: #b8c5c5;
+            --text-dim: #4a5858;
+            --success: #00c896;
+            --warning: #c8a000;
+            --danger: #c84040;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'IBM Plex Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Toolbar — matches viewer */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .toolbar-brand { display: flex; align-items: baseline; gap: 0.5rem; }
+        .toolbar-brand .host {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem; font-weight: 500;
+            color: var(--cyan); letter-spacing: 0.1em;
+        }
+        .toolbar-brand .tag {
+            font-size: 0.6rem; padding: 0.2rem 0.5rem;
+            background: var(--magenta); color: #fff;
+            letter-spacing: 0.1em; text-transform: uppercase;
+        }
+
+        .status {
+            display: flex; align-items: center; gap: 0.5rem;
+            font-size: 0.75rem; color: var(--text-dim);
+        }
+        .status-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--success); box-shadow: 0 0 8px var(--success);
+        }
+
+        .toolbar-controls { display: flex; gap: 0.5rem; margin-left: auto; }
+        .btn-tool {
+            padding: 0.5rem 0.875rem;
+            font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
+            background: transparent; border: 1px solid var(--border);
+            color: var(--text-dim); cursor: pointer; transition: all 0.2s;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            text-decoration: none;
+        }
+        .btn-tool:hover { border-color: var(--cyan); color: var(--cyan); }
+        .btn-tool.active { border-color: var(--cyan); background: var(--cyan-subtle); color: var(--cyan); }
+        .btn-tool.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+        /* Terminal output area */
+        .terminal {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 1.5rem;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .term-block { margin-bottom: 0.75rem; }
+
+        .term-prompt {
+            color: var(--cyan);
+            user-select: none;
+        }
+        .term-prompt .user { color: var(--magenta); }
+        .term-prompt .path { color: var(--cyan); }
+        .term-prompt .arrow { color: var(--text-dim); }
+
+        .term-cmd { color: var(--text); }
+
+        .term-stdout {
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: var(--text);
+            padding-left: 0.25rem;
+            border-left: 2px solid var(--border);
+            margin: 0.25rem 0 0 0;
+        }
+
+        .term-stderr {
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: var(--danger);
+            padding-left: 0.25rem;
+            border-left: 2px solid var(--danger);
+            margin: 0.25rem 0 0 0;
+        }
+
+        .term-meta {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            margin-top: 0.25rem;
+        }
+
+        .term-error {
+            color: var(--danger);
+            font-weight: 500;
+        }
+
+        /* Input line */
+        .input-line {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+            gap: 0.5rem;
+        }
+
+        .input-prompt {
+            color: var(--cyan);
+            font-size: 0.85rem;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .input-prompt .user { color: var(--magenta); }
+
+        .input-field {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.85rem;
+            outline: none;
+            caret-color: var(--cyan);
+        }
+
+        .input-field::placeholder { color: var(--text-dim); }
+
+        .input-status {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            flex-shrink: 0;
+        }
+        .input-status.running { color: var(--warning); }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-brand">
+            <span class="host">{{.Hostname}}</span>
+            <span class="tag">Terminal</span>
+        </div>
+        <div class="status">
+            <span class="status-dot"></span>
+            <span>Connected</span>
+        </div>
+        <div class="toolbar-controls">
+            <a class="btn-tool" id="btnViewer" title="Switch to remote desktop">Desktop</a>
+            <button class="btn-tool" id="btnClear" title="Clear terminal">Clear</button>
+            <a class="btn-tool danger" href="/clients">End</a>
+        </div>
+    </div>
+
+    <div class="terminal" id="terminal">
+        <div class="term-block">
+            <span style="color:var(--text-dim);">Remote terminal session — {{.Hostname}}</span><br>
+            <span style="color:var(--text-dim);">Commands execute via /exec endpoint. Type 'help' for tips.</span>
+        </div>
+    </div>
+
+    <div class="input-line">
+        <span class="input-prompt"><span class="user">{{.Hostname}}</span>:<span id="promptPath">~</span>$</span>
+        <input type="text" class="input-field" id="cmdInput" placeholder="Enter command..." autofocus autocomplete="off" spellcheck="false">
+        <span class="input-status" id="inputStatus"></span>
+    </div>
+
+    <script>
+        const hostname = '{{.Hostname}}';
+        const baseURL = '{{.BaseURL}}';
+
+        const terminal = document.getElementById('terminal');
+        const cmdInput = document.getElementById('cmdInput');
+        const inputStatus = document.getElementById('inputStatus');
+        const promptPath = document.getElementById('promptPath');
+
+        let cwd = '~';
+        let history = [];
+        let historyIdx = -1;
+        let running = false;
+
+        // Link back to desktop viewer
+        const params = new URLSearchParams(window.location.search);
+        document.getElementById('btnViewer').href =
+            `/viewer?host=${params.get('host') || ''}&name=${params.get('name') || ''}`;
+
+        // Load initial system info for cwd
+        (async () => {
+            try {
+                const resp = await fetch(`${baseURL}/`);
+                const info = await resp.json();
+                if (info.os === 'darwin') cwd = '~';
+                else if (info.os === 'windows') cwd = 'C:\\';
+            } catch {}
+        })();
+
+        function makePrompt() {
+            return `<span class="term-prompt"><span class="user">${hostname}</span>:<span class="path">${escHtml(cwd)}</span><span class="arrow">$</span></span>`;
+        }
+
+        function escHtml(s) {
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function appendBlock(html) {
+            const div = document.createElement('div');
+            div.className = 'term-block';
+            div.innerHTML = html;
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function updatePromptPath() {
+            promptPath.textContent = cwd;
+        }
+
+        // Built-in commands
+        function handleBuiltin(cmd) {
+            const parts = cmd.trim().split(/\s+/);
+            if (parts[0] === 'clear') {
+                terminal.innerHTML = '';
+                return true;
+            }
+            if (parts[0] === 'help') {
+                appendBlock(
+                    `${makePrompt()} <span class="term-cmd">${escHtml(cmd)}</span>` +
+                    `<div class="term-stdout">` +
+                    `Available commands:\n` +
+                    `  Any shell command   — executed on the remote host\n` +
+                    `  cd &lt;path&gt;          — change working directory\n` +
+                    `  clear               — clear terminal\n` +
+                    `  help                — show this message\n\n` +
+                    `Tips:\n` +
+                    `  ↑/↓ arrows for command history\n` +
+                    `  Output is split into stdout (white) and stderr (red)\n` +
+                    `  Exit code and duration shown after each command</div>`
+                );
+                return true;
+            }
+            return false;
+        }
+
+        async function execCommand(cmd) {
+            if (!cmd.trim()) return;
+
+            history.push(cmd);
+            historyIdx = history.length;
+
+            if (handleBuiltin(cmd)) return;
+
+            // Handle 'cd' locally — update cwd and verify
+            const cdMatch = cmd.trim().match(/^cd\s+(.+)$/);
+
+            appendBlock(`${makePrompt()} <span class="term-cmd">${escHtml(cmd)}</span>`);
+
+            running = true;
+            inputStatus.textContent = 'running...';
+            inputStatus.className = 'input-status running';
+
+            try {
+                let actualCmd, args, dir;
+
+                if (cdMatch) {
+                    // Use a shell to cd + pwd to resolve the new path
+                    const target = cdMatch[1].replace(/^["']|["']$/g, '');
+                    actualCmd = '/bin/sh';
+                    args = ['-c', `cd "${target}" && pwd`];
+                    dir = cwd === '~' ? '' : cwd;
+                } else {
+                    // Run via shell so pipes, redirects, etc. work
+                    actualCmd = '/bin/sh';
+                    args = ['-c', cmd];
+                    dir = cwd === '~' ? '' : cwd;
+                }
+
+                const resp = await fetch(`${baseURL}/exec`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        command: actualCmd,
+                        args: args,
+                        dir: dir,
+                        timeout: 30,
+                        hidden: true
+                    })
+                });
+
+                const result = await resp.json();
+
+                if (cdMatch) {
+                    if (result.exit_code === 0 && result.stdout.trim()) {
+                        cwd = result.stdout.trim();
+                        updatePromptPath();
+                    } else {
+                        const errMsg = result.stderr || result.error || 'cd failed';
+                        appendBlock(`<div class="term-stderr">${escHtml(errMsg.trim())}</div>`);
+                    }
+                } else {
+                    let html = '';
+                    if (result.stdout && result.stdout.trim()) {
+                        html += `<div class="term-stdout">${escHtml(result.stdout)}</div>`;
+                    }
+                    if (result.stderr && result.stderr.trim()) {
+                        html += `<div class="term-stderr">${escHtml(result.stderr)}</div>`;
+                    }
+                    if (result.error) {
+                        html += `<div class="term-error">${escHtml(result.error)}</div>`;
+                    }
+                    if (!result.stdout && !result.stderr && !result.error) {
+                        html += `<div class="term-stdout" style="color:var(--text-dim);">(no output)</div>`;
+                    }
+                    const meta = `exit ${result.exit_code} · ${result.duration}`;
+                    html += `<div class="term-meta">${meta}</div>`;
+                    appendBlock(html);
+                }
+            } catch (err) {
+                appendBlock(`<div class="term-error">${escHtml(err.message)}</div>`);
+            } finally {
+                running = false;
+                inputStatus.textContent = '';
+                inputStatus.className = 'input-status';
+            }
+        }
+
+        // Input handling
+        cmdInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !running) {
+                const cmd = cmdInput.value;
+                cmdInput.value = '';
+                execCommand(cmd);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (historyIdx > 0) {
+                    historyIdx--;
+                    cmdInput.value = history[historyIdx];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIdx < history.length - 1) {
+                    historyIdx++;
+                    cmdInput.value = history[historyIdx];
+                } else {
+                    historyIdx = history.length;
+                    cmdInput.value = '';
+                }
+            } else if (e.key === 'l' && e.ctrlKey) {
+                e.preventDefault();
+                terminal.innerHTML = '';
+            }
+        });
+
+        // Clear button
+        document.getElementById('btnClear').addEventListener('click', () => {
+            terminal.innerHTML = '';
+        });
+
+        // Keep focus on input
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.toolbar') && !window.getSelection().toString()) {
+                cmdInput.focus();
+            }
+        });
+    </script>
+</body>
+</html>

