@@ -1,4 +1,4 @@
-# Remote Management Tool
+# Remote Management Tool (Tailscale-C2)
 
 A lightweight remote management framework built in Go. Uses [Tailscale](https://tailscale.com/) (embedded WireGuard mesh) as the transport layer — no port forwarding, no exposed services on the public internet, all traffic E2E encrypted.
 
